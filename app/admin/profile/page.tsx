@@ -1,4 +1,5 @@
 import { getCookies } from "@/helper/cookies";
+import { cookies } from "next/headers";
 import Link from "next/link";
 
 export interface ResponseAdminProfile {
@@ -30,23 +31,49 @@ export interface User {
 
 async function getAdminProfile(): Promise<Admin | null> {
   try {
+    // 1. Ambil token dari cookie (cara server-side Next.js)
+    const cookieStore = cookies();
+    const token = (await cookies()).get('token')?.value; // ✅ Next.js 15/16+
+
+    // Debug: biar kita tahu token terbaca atau tidak
+    console.log("=== DEBUG PROFILE ===");
+    console.log("Token ada?", !!token);
+    console.log("API URL:", process.env.NEXT_PUBLIC_BASE_URL);
+
+    // Kalau token nggak ada, langsung return null
+    if (!token) {
+      console.error("❌ Token tidak ditemukan di cookie");
+      return null;
+    }
+
+    // 2. Fetch ke backend
     const url = `${process.env.NEXT_PUBLIC_BASE_URL}/admins/me`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
         "APP-KEY": process.env.NEXT_PUBLIC_APP_KEY || "",
-        Authorization: `Bearer ${await getCookies("token")}`,
+        "Authorization": `Bearer ${token}`, // ← Token dikirim di header
       },
     });
 
     const responseData: ResponseAdminProfile = await response.json();
+    
+    // 3. Cek response
     if (!response.ok) {
-      console.error("Failed to fetch admin profile:", responseData.message);
+      console.error("❌ Failed to fetch admin profile:", responseData.message);
       return null;
     }
+    
+    if (!responseData.data) {
+      console.warn("⚠️ Response ok tapi data null:", responseData);
+      return null;
+    }
+    
+    console.log("✅ Admin profile loaded:", responseData.data.name);
     return responseData.data;
+    
   } catch (error) {
-    console.error("Error fetching admin profile:", error);
+    console.error("💥 Error fetching admin profile:", error);
     return null;
   }
 }
